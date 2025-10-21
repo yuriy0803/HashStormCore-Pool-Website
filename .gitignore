@@ -1,0 +1,5 @@
+# Ignore .env.local
+ui/.env.local
+
+# Ignore pool folders
+ui/app/pools/btcz_solo/
