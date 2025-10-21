@@ -2,7 +2,7 @@ import { api } from "@/lib/api";
 import PoolCard from "@/components/PoolCard";
 
 export default async function PoolsPage() {
-  const pools = await api.listPools().catch(() => []);
+  const pools = await api.listPools().catch(()=>[]);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">All Pools</h1>

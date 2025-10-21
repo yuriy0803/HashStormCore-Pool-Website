@@ -1,5 +1,6 @@
 # Ignore .env.local
 ui/.env.local
 
-# Ignore pool folders
-ui/app/pools/btcz_solo/
+# Ignore folders (node, trash, etc..)
+ui/node_modules
+ui/.next

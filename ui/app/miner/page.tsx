@@ -73,7 +73,7 @@ export default function MinerPage() {
 
           {Array.isArray(data.payments) && data.payments.length > 0 && (
             <section className="space-y-2">
-              <h2 className="font-semibold">Pagamentos</h2>
+              <h2 className="font-semibold">Payments</h2>
               <Table>
                 <thead>
                   <tr><Th>TX</Th><Th>Amount</Th><Th>Data</Th></tr>
