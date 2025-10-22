@@ -6,3 +6,6 @@ ui/node_modules
 ui/node_modules/
 ui/.next
 
+**/node_modules/
+**/.next/
+**/.env.local/

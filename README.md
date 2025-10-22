@@ -20,6 +20,7 @@ NOTE: no need to change code when adding new pools.
 
 ## Structure
 
+```
 ui/
 ├─ app/
 │ ├─ page.tsx # Dashboard (todas as pools)
@@ -52,6 +53,7 @@ ui/
 ├─ next.config.mjs
 ├─ tailwind.config.ts
 └─ postcss.config.js
+```
 
 ---
 
@@ -192,7 +194,9 @@ Please consider in crediting the original author (Miguel Matos Barreto)
 
 # Donate
 
+```
 BTC: TO ADD
 ETH: TO ADD
 LTC: TO ADD
 SOL: TO ADD
+```
