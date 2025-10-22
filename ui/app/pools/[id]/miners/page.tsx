@@ -3,6 +3,7 @@ import { Table, Th, Td } from "@/components/Table";
 import { fmtHashrate, fmtNum } from "@/lib/format";
 import Link from "next/link";
 
+// ui/pools/[id]/miners/page.tsx
 export default async function PoolMiners({ params }: { params: { id: string }}) {
   const miners = await api.listPoolMiners(params.id);
   return (

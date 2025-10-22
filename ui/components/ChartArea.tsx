@@ -1,3 +1,5 @@
+// ui/components/ChartArea.tsx
+
 "use client";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,

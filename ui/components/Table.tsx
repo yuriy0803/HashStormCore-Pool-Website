@@ -1,3 +1,5 @@
+// ui/components/Table.tsx
+
 import { ReactNode } from "react";
 
 export function Table({ children }: { children: ReactNode }) {

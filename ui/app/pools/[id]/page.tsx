@@ -5,6 +5,8 @@ import ChartArea from "@/components/ChartArea";
 import Link from "next/link";
 import { fmtHashrate, fmtNum, fmtISO, short } from "@/lib/format";
 
+
+// ui/pools/[id]/page.tsx
 export default async function PoolDetail({ params }: { params: { id: string } }) {
   const pool = await api.getPool(params.id);
   const perf = await api.getPoolPerformance(params.id); // PoolPerfPoint[]
@@ -46,20 +48,52 @@ export default async function PoolDetail({ params }: { params: { id: string } })
       {pool.topMiners && pool.topMiners.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold">Top miners</h2>
-          <Table>
-            <thead><tr><Th>Miner</Th><Th>Hashrate</Th><Th>Shares/s</Th></tr></thead>
-            <tbody>
-              {pool.topMiners.map(m => (
-                <tr key={m.miner}>
-                  <Td>
-                    <Link className="underline" href={`/pools/${pool.id}/miners/${m.miner}`}>{m.miner}</Link>
-                  </Td>
-                  <Td>{fmtHashrate(m.hashrate)}</Td>
-                  <Td>{fmtNum(m.sharesPerSecond, 4)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          {/*
+            For non SOLO pools, fetch pending shares
+            (Small list -> paralel fetch OK)
+          */}
+          {async function TopMinersTable() {
+            const isSolo = (pool.paymentProcessing?.payoutScheme || "").toUpperCase() === "SOLO";
+            const rows = isSolo
+              ? pool.topMiners!.map(m => ({ ...m, pendingShares: undefined }))
+              : await Promise.all(
+                pool.topMiners!.map(async (m) => {
+                  try {
+                    const d = await api.getMinerInPool(pool.id, m.miner);
+                    return { ...m, pendingShares: d.pendingShares };
+                  } catch {
+                    return { ...m, pendingShares: undefined };
+                  }
+                })
+              );
+
+            return (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Miner</Th>
+                    <Th>Hashrate</Th>
+                    <Th>Shares/s</Th>
+                    {!isSolo && <Th>Pending shares</Th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((m) => (
+                    <tr key={m.miner}>
+                      <Td>
+                        <Link className="underline" href={`/pools/${pool.id}/miners/${m.miner}`}>
+                          {m.miner}
+                        </Link>
+                      </Td>
+                      <Td>{fmtHashrate(m.hashrate)}</Td>
+                      <Td>{fmtNum(m.sharesPerSecond, 4)}</Td>
+                      {!isSolo && <Td>{m.pendingShares != null ? fmtNum(m.pendingShares, 4) : "—"}</Td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            );
+          }()}
           <div className="text-sm text-sub">
             All: <Link className="underline" href={`/pools/${pool.id}/miners`}>/miners</Link> •
             Blocks: <Link className="underline" href={`/pools/${pool.id}/blocks`}>/blocks</Link> •

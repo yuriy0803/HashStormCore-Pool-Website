@@ -1,3 +1,5 @@
+// ui/components/Stat.tsx
+
 import { ReactNode } from "react";
 
 export default function Stat({

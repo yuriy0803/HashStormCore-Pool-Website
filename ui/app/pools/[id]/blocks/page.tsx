@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
 import { fmtNum, fmtISO, short } from "@/lib/format";
 
+// ui/pools/[id]/blocks/page.tsx
 export default async function PoolBlocks({ params }: { params: { id: string }}) {
   const blocks = await api.listPoolBlocks(params.id);
   return (

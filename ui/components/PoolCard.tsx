@@ -1,3 +1,5 @@
+// ui/components/PoolCard.tsx
+
 import Link from "next/link";
 import { Pool } from "@/lib/types";
 import Stat from "./Stat";
@@ -8,7 +10,7 @@ export default function PoolCard({ p }: { p: Pool }) {
     <Link href={`/pools/${p.id}`} className="block rounded-2xl bg-card border border-edge p-4 hover:border-accent/60 transition">
       <div className="flex items-center justify-between">
         <div className="font-semibold text-lg">
-          {p.coin.symbol.toUpperCase()} • {p.coin.name} <span className="text-sub text-sm">({p.id})</span>
+          {p.id.replaceAll("_", " ").toUpperCase()}
         </div>
         <div className="text-sub text-sm">{p.paymentProcessing.payoutScheme} • fee {p.poolFeePercent}%</div>
       </div>

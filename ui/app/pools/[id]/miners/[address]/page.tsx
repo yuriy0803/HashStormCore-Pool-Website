@@ -4,6 +4,7 @@ import Stat from "@/components/Stat";
 import ChartArea from "@/components/ChartArea";
 import { fmtHashrate, fmtNum, fmtISO } from "@/lib/format";
 
+// ui/pools/[id]/miners/[address]/page.tsx
 export default async function MinerDetailPage({ params }: { params: { id: string; address: string }}) {
   const detail = await api.getMinerInPool(params.id, params.address);
   const perf = await api.getMinerPerformance(params.id, params.address);
