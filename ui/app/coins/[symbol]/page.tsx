@@ -1,8 +1,12 @@
+// ui/app/coins/[symbol]/page.tsx
+
 import { api } from "@/lib/api";
 import PoolCard from "@/components/PoolCard";
 import Stat from "@/components/Stat";
 import { fmtHashrate } from "@/lib/format";
 import { tServer } from "@/i18n/server";
+
+export const revalidate = 0;
 
 export default async function CoinPoolsPage({ params }: { params: { symbol: string }}) {
   const tStat = tServer("Stat");
@@ -19,8 +23,7 @@ export default async function CoinPoolsPage({ params }: { params: { symbol: stri
 
   return (
     <div className="space-y-4">
-      {/* header mantém (se quiseres o ícone, volta a pôr o <Image /> e importa-o) */}
-      <h1 className="text-xl font-semibold">{symbol} • {name}</h1>
+      <h1 className="text-xl font-semibold">{symbol} ({name})</h1>
 
       <div className="grid grid-cols-3 gap-3">
         <Stat label={tStat("totalHashrate")} value={fmtHashrate(totalHashrate)} />

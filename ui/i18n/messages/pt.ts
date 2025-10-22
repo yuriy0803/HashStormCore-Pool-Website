@@ -17,13 +17,13 @@ const pt = {
     portuguese: "Português"
   },
   Home: {
-    welcomeBadge: "welcome",
+    welcomeBadge: "Bem vindo",
     tagline: "Pools multi-moeda • rápidas, transparentes e simples",
     exploreCoins: "Explorar moedas",
     viewPools: "Ver pools",
     minerLookup: "Procurar miner",
     tip: "Dica: para ligar o miner, abre uma pool e copia o endpoint",
-    endpoint: "stratum+tcp(s)://coin.hashstorm.org:PORT"
+    endpoint: "stratum+tcp://coin.hashstorm.org:PORT"
   },
   Stat: {
     coins: "Moedas",

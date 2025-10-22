@@ -23,7 +23,7 @@ const en = {
     viewPools: "View pools",
     minerLookup: "Miner lookup",
     tip: "Tip: to connect your miner, open a pool and copy the endpoint",
-    endpoint: "stratum+tcp(s)://coin.hashstorm.org:PORT"
+    endpoint: "stratum+tcp://coin.hashstorm.org:PORT"
   },
   Stat: {
     coins: "Coins",

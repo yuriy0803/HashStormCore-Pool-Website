@@ -1,3 +1,4 @@
+// ui/app/miner/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,7 +34,7 @@ export default function MinerPage() {
             router.push(`/pools/${encodeURIComponent(p.id)}/miners/${encodeURIComponent(a)}`);
             return;
           }
-        } catch {/* continua */}
+        } catch {}
       }
       setMsg(tC("notFoundMiner"));
     } catch {

@@ -1,7 +1,11 @@
+// ui/app/coins/page.tsx
+
 import { api } from "@/lib/api";
 import CoinCard from "@/components/CoinCard";
 import Stat from "@/components/Stat";
 import { tServer } from "@/i18n/server";
+
+export const revalidate = 0;
 
 export default async function CoinsPage() {
   const tStat = tServer("Stat");

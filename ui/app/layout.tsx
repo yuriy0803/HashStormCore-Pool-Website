@@ -1,3 +1,5 @@
+// ui/app/layout.tsx
+
 import "./globals.css";
 import Header from "@/components/Header";
 import { getLang, getMessages } from "@/i18n/server";

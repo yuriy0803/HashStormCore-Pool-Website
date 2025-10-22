@@ -1,7 +1,11 @@
+// ui/app/pools/page.tsx
+
 import { api } from "@/lib/api";
 import PoolCard from "@/components/PoolCard";
 import Stat from "@/components/Stat";
 import { tServer } from "@/i18n/server";
+
+export const revalidate = 0;
 
 export default async function PoolsPage() {
   const tStat = tServer("Stat");
@@ -24,3 +28,4 @@ export default async function PoolsPage() {
     </div>
   );
 }
+

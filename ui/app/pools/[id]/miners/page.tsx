@@ -1,16 +1,26 @@
+// ui/app/pools/[id]/miners/page.tsx
 import { api } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
 import { fmtHashrate, fmtNum } from "@/lib/format";
 import Link from "next/link";
+import { tServer } from "@/i18n/server";
 
-// ui/pools/[id]/miners/page.tsx
+export const revalidate = 0;
+
 export default async function PoolMiners({ params }: { params: { id: string }}) {
+  const tPool = tServer("Pool");
   const miners = await api.listPoolMiners(params.id);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Miners - {params.id}</h1>
       <Table>
-        <thead><tr><Th>Miner</Th><Th>Hashrate</Th><Th>Shares/s</Th></tr></thead>
+        <thead>
+          <tr>
+            <Th>{tPool("table.miner")}</Th>
+            <Th>{tPool("table.hashrate")}</Th>
+            <Th>{tPool("table.sharesS")}</Th>
+          </tr>
+        </thead>
         <tbody>
           {miners.map(m => (
             <tr key={m.miner}>

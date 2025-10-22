@@ -1,16 +1,26 @@
+// ui/app/pools/[id]/payments/page.tsx
+
 import { api } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
 import { fmtNum, fmtISO, short } from "@/lib/format";
+import { tServer } from "@/i18n/server";
 
-// ui/pools/[id]/payments/page.tsx
+export const revalidate = 0;
+
 export default async function PoolPayments({ params }: { params: { id: string }}) {
+  const tPool = tServer("Pool");
   const pays = await api.listPoolPayments(params.id);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Payments - {params.id}</h1>
       <Table>
         <thead>
-          <tr><Th>Address</Th><Th>Amount</Th><Th>TX</Th><Th>Data</Th></tr>
+          <tr>
+            <Th>{tPool("table.address")}</Th>
+            <Th>{tPool("table.amount")}</Th>
+            <Th>{tPool("table.tx")}</Th>
+            <Th>{tPool("table.date")}</Th>
+          </tr>
         </thead>
         <tbody>
           {pays.map((p,i) => (
