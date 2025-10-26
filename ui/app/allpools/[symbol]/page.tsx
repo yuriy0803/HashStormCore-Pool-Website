@@ -1,4 +1,4 @@
-// ui/app/coins/[symbol]/page.tsx
+// ui/app/allpools/[symbol]/page.tsx
 
 import { api } from "@/lib/api";
 import PoolCard from "@/components/PoolCard";

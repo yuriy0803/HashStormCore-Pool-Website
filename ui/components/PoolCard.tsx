@@ -18,7 +18,12 @@ export default function PoolCard({ p }: { p: Pool }) {
     >
       <div className="flex items-center justify-between">
         <div className="font-semibold text-lg">
-          <Image src={`/coins/${p.coin.name}.svg`} alt={p.coin.symbol} width={36} height={36} />
+          <Image
+            src={`/coins/${p.coin.name.toLowerCase()}.png`}
+            alt={p.coin.symbol}
+            width={36}
+            height={36}
+          />
           {p.id.replaceAll("_", " ").toUpperCase()}
         </div>
         <div className="text-sub text-sm">

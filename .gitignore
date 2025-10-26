@@ -10,4 +10,8 @@ ui/.next
 **/.next/
 **/.env.local/
 
+# Ignore
+script.js
+script_web.txt
+
 TEMP

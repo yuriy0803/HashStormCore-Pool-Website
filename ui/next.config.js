@@ -1,0 +1,42 @@
+// next.config.js
+const isDev = process.env.NODE_ENV !== "production";
+
+/** @type {import('next').NextConfig} */
+module.exports = {
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",                        // browser
+        destination: "http://192.168.1.169:4000/api/:path*", // Next path
+      },
+    ];
+  },
+
+  //
+  async headers() {
+    if (!isDev) return [];
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval'",      // only in dev
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "connect-src 'self' " + process.env.MININGCORE_INTERNAL_API_URL,
+            ].join("; "),
+          },
+        ],
+      },
+    ];
+  },
+
+  // avoid devtool based on eval
+  webpack(config, { dev }) {
+    if (dev) config.devtool = "cheap-module-source-map";
+    return config;
+  },
+};

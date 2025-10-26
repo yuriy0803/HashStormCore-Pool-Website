@@ -1,69 +1,54 @@
 // ui/components/PoolPerfChart.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import ChartArea from "@/components/ChartArea";
+import { useEffect, useState } from "react";
 
-type Point = { t: string; poolHashrate: number };
-type PerfPoint = { created: string; poolHashrate?: number | null };
+type Point = { t: string; poolHashrate?: number; miners?: number };
 
-function joinUrl(base: string, path: string) {
-  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
-}
-
-export default function PoolPerfChart({
-  poolId,
-  initialData = []
-}: {
-  poolId: string;
-  initialData?: Point[];
-}) {
-  const [data, setData] = useState<Point[]>(initialData);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function load() {
-    const BASE = process.env.NEXT_PUBLIC_MININGCORE_API_URL;
-    if (!BASE) {
-      setErr("NEXT_PUBLIC_MININGCORE_API_URL missing");
-      return;
-    }
-    try {
-      setErr(null);
-      const url = joinUrl(BASE, `/pools/${encodeURIComponent(poolId)}/performance`);
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-
-      const json: unknown = await r.json();
-      const arr: PerfPoint[] =
-        Array.isArray(json) ? json :
-        Array.isArray((json as any)?.data) ? (json as any).data :
-        [];
-
-      const chart: Point[] = arr.map((p) => ({
-        t: new Date(p.created).toLocaleTimeString(),
-        poolHashrate: Number(p.poolHashrate ?? 0)
-      }));
-
-      setData(chart);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to fetch");
-      // mantém os dados atuais (SSR) para não piscar vazio
-    }
-  }
+export default function PoolPerfChart({ poolId }: { poolId: string }) {
+  const [data, setData] = useState<Point[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    load(); // 1º refresh ao montar
-    const i = setInterval(load, 300_000); // 5 minutos
-    return () => clearInterval(i);
+    let alive = true;
+
+    async function load() {
+      try {
+        const res = await fetch(`/pools/${encodeURIComponent(poolId)}/performance`, { cache: "no-store" });
+        const json = await res.json();
+        if (!alive) return;
+        // Expect compacted points from the route (already formatted server-side).
+        setData(Array.isArray(json) ? json : (json?.stats ?? []));
+      } catch {
+        if (alive) setData([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    load();
+    // In dev we can poll a bit; in prod we can remove or increase interval.
+    const id = setInterval(load, process.env.NODE_ENV === "development" ? 5000 : 15000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, [poolId]);
 
-  const chartData = useMemo(() => data, [data]);
+  if (loading) return <div className="text-sm text-gray-500">Loading performance…</div>;
+  if (!data.length) return <div className="text-sm text-gray-500">No data</div>;
 
   return (
-    <>
-      {err && <div className="text-sm text-red-400">Error: {err}</div>}
-      <ChartArea data={chartData} xKey="t" yKey="poolHashrate" yFormat="hashrate" />
-    </>
+    <div className="border rounded p-3">
+      <div className="text-sm mb-2">Pool Hashrate (last window)</div>
+      <ul className="text-xs grid grid-cols-2 gap-1">
+        {data.slice(-20).map((p, i) => (
+          <li key={i} className="flex justify-between">
+            <span>{p.t}</span>
+            <span>{p.poolHashrate ?? 0}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
-

@@ -1,4 +1,3 @@
-// ui/components/Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -18,15 +17,15 @@ export default function Header() {
     const a = addr.trim();
     if (!a) return;
 
-    const BASE = process.env.NEXT_PUBLIC_MININGCORE_API_URL!;
     try {
-      const r = await fetch(`${BASE}/pools`, { cache: "no-store" });
+      // uses proxy from Next
+      const r = await fetch(`/api/pools`, { cache: "no-store" });
       const data = await r.json();
       const all = data?.pools ?? [];
 
       for (const pool of all) {
         try {
-          const res = await fetch(`${BASE}/pools/${pool.id}/miners/${a}`, { cache: "no-store" });
+          const res = await fetch(`/api/pools/${encodeURIComponent(pool.id)}/miners/${encodeURIComponent(a)}`, { cache: "no-store" });
           if (res.ok) {
             router.push(`/pools/${encodeURIComponent(pool.id)}/miners/${encodeURIComponent(a)}`);
             return;
@@ -43,13 +42,7 @@ export default function Header() {
     <header className="border-b border-edge sticky top-0 z-50 bg-bg/80 backdrop-blur">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-4">
         <Link href="/" className="font-semibold text-lg">HashStorm</Link>
-
-        <nav className="flex items-center gap-4 text-sub">
-          <Link href="/coins">{tH("coins")}</Link>
-          <Link href="/pools">{tH("pools")}</Link>
-          <Link href="/miner">{tH("miner")}</Link>
-        </nav>
-
+    
         <form onSubmit={onSubmit} className="ml-auto flex items-center gap-2">
           <input
             className="rounded-xl bg-card border border-edge px-3 py-2 w-56"

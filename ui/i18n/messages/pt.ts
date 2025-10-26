@@ -9,7 +9,6 @@ const pt = {
     poolServerError: "Erro a comunicar com o servidor da pool."
   },
   Header: {
-    coins: "Moedas",
     pools: "Pools",
     miner: "Miner",
     language: "Idioma",
@@ -18,15 +17,14 @@ const pt = {
   },
   Home: {
     welcomeBadge: "Bem vindo",
-    tagline: "Pools multi-moeda • rápidas, transparentes e simples",
-    exploreCoins: "Explorar moedas",
+    tagline: "Pools rápidas, transparentes e simples",
     viewPools: "Ver pools",
     minerLookup: "Procurar miner",
     tip: "Dica: para ligar o miner, abre uma pool e copia o endpoint",
     endpoint: "stratum+tcp://coin.hashstorm.org:PORT"
   },
   Stat: {
-    coins: "Moedas",
+    coins: "Coins",
     pools: "Pools",
     connectedMiners: "Miners ligados",
     totalHashrate: "Total hashrate",
@@ -41,16 +39,16 @@ const pt = {
     todayPaid: "Pago hoje",
     minerEffort: "Esforço do miner"
   },
-  CoinsPage: {
-    title: "Moedas",
-    subtitle: "Todas as moedas",
+  allpoolsPage: {
+    title: "Pools",
+    subtitle: "Todas as Pools",
     poolsCount: "Pools"
   },
   CoinPools: {
     noPools: "Sem pools para {symbol}."
   },
   PoolsPage: {
-    title: "Todas as Pools"
+    title: "Pools"
   },
   Pool: {
     performanceTitle: "Desempenho (últimas horas)",

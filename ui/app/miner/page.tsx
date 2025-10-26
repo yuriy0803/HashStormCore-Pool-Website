@@ -1,76 +1,40 @@
 // ui/app/miner/page.tsx
-"use client";
+import Link from "next/link";
 
-import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useT } from "@/i18n/client";
+export const revalidate = 0;
 
-export default function MinerPage() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const t = useT("Miner");
-  const tC = useT("Common");
-
-  const [addr, setAddr] = useState(params.get("address") || "");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function runSearch() {
-    const a = addr.trim();
-    if (!a) return;
-    setLoading(true);
-    setMsg(null);
-
-    const BASE = process.env.NEXT_PUBLIC_MININGCORE_API_URL!;
-    try {
-      const r = await fetch(`${BASE}/pools`, { cache: "no-store" });
-      const data = await r.json();
-      const pools = data?.pools ?? [];
-
-      for (const p of pools) {
-        try {
-          const minerRes = await fetch(`${BASE}/pools/${p.id}/miners/${a}`, { cache: "no-store" });
-          if (minerRes.ok) {
-            router.push(`/pools/${encodeURIComponent(p.id)}/miners/${encodeURIComponent(a)}`);
-            return;
-          }
-        } catch {}
-      }
-      setMsg(tC("notFoundMiner"));
-    } catch {
-      setMsg(tC("poolServerError"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const q = params.get("address");
-    if (q) {
-      setAddr(q);
-      runSearch();
-    }
-  }, []);
+export default function MinerLookupPage({
+  searchParams,
+}: {
+  searchParams?: { address?: string; notfound?: string };
+}) {
+  const address = (searchParams?.address || "").trim();
+  const notfound = searchParams?.notfound === "1";
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">{t("lookupTitle")}</h1>
-      <div className="flex flex-col md:flex-row gap-3">
-        <input
-          className="rounded-xl bg-card border border-edge px-3 py-2 flex-1"
-          placeholder={tC("walletAddress")}
-          value={addr}
-          onChange={(e) => setAddr(e.target.value)}
-        />
-        <button
-          onClick={runSearch}
-          disabled={!addr || loading}
-          className="rounded-xl bg-accent/20 border border-accent/40 px-4 py-2 hover:bg-accent/30 disabled:opacity-50"
-        >
-          {loading ? tC("searching") : tC("search")}
-        </button>
-      </div>
-      {msg && <div className="text-red-400">{msg}</div>}
-    </div>
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <h1 className="text-2xl font-semibold mb-4">Miner Lookup</h1>
+      {address ? (
+        notfound ? (
+          <div className="rounded border p-4 bg-yellow-50">
+            <p className="mb-2">No miner found for address:</p>
+            <code className="px-2 py-1 bg-white border rounded">{address}</code>
+            <p className="mt-3">Tip: make sure you typed the full address. If the miner is offline for long, it may not appear.</p>
+          </div>
+        ) : (
+          <div className="rounded border p-4 bg-blue-50">
+            <p>Searching miner <code className="px-2 py-1 bg-white border rounded">{address}</code>…</p>
+            <p className="mt-2">You should be redirected automatically from the header search.</p>
+          </div>
+        )
+      ) : (
+        <div className="rounded border p-4">
+          <p>Use the header search to find a miner by address.</p>
+          <p className="mt-2">
+            Go to <Link href="/allpools" className="underline">Pools</Link> to browse miners by pool.
+          </p>
+        </div>
+      )}
+    </main>
   );
 }
