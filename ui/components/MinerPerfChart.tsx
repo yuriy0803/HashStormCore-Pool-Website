@@ -14,8 +14,7 @@ export default function MinerPerfChart({ poolId, address }: { poolId: string; ad
 
     async function load() {
       try {
-        const res = await fetch(`/pools/${encodeURIComponent(poolId)}/miners/${encodeURIComponent(address)}/performance`, { cache: "no-store" });
-        const json = await res.json();
+        const res = await fetch(`/api/pools/${encodeURIComponent(poolId)}/miners/${encodeURIComponent(address)}/performance`, { cache: "no-store" }); const json = await res.json();
         if (!alive) return;
         setData(Array.isArray(json) ? json : json);
       } catch {
@@ -33,7 +32,7 @@ export default function MinerPerfChart({ poolId, address }: { poolId: string; ad
     };
   }, [poolId, address]);
 
-  if (loading) return <div className="text-sm text-gray-500">Loading miner performance…</div>;
+  if (loading) return <div className="text-sm text-gray-500">Loading miner performance...</div>;
   if (!data.length) return <div className="text-sm text-gray-500">No data</div>;
 
   return (

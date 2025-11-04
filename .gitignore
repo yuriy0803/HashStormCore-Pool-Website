@@ -1,5 +1,9 @@
 # Ignore .env.local
+.env.local
 ui/.env.local
+.env.development
+ui/.env.development
+.env.production
 
 # Ignore folders (node, trash, etc..)
 ui/node_modules
@@ -9,6 +13,8 @@ ui/.next
 **/node_modules/
 **/.next/
 **/.env.local/
+**/.env.development/
+**/.env.production/
 
 # Ignore
 script.js

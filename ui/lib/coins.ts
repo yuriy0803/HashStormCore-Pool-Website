@@ -1,9 +1,5 @@
-// lib/coins.ts
+// Fallback query version (served by an optional route handler)
 export function coinIcon(symbol?: string) {
-  const key = (symbol || "").toLowerCase();
-  return `/coins/${key}.svg`;
-}
-
-export function coinKey(symbol?: string) {
-  return (symbol || "unknown").toLowerCase();
+  const key = (symbol ?? "").toLowerCase();
+  return `/api/coin-icon?key=${encodeURIComponent(key)}`;
 }

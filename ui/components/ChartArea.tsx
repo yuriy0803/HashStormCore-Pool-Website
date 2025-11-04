@@ -1,62 +1,57 @@
+// ui/components/ChartArea.tsx
 "use client";
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid
-} from "recharts";
+
 import { useMemo } from "react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { fmtHashrateUnit, fmtNum } from "@/lib/format";
 
-// ---------------- format utils
-function fmtHashrateLocal(v?: number) {
-  if (!v) return "0 H/s";
-  const u = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s"];
-  let i = 0, val = Number(v);
-  while (val >= 1000 && i < u.length - 1) { val /= 1000; i++; }
-  return `${val.toFixed(2)} ${u[i]}`;
-}
-function fmtNumLocal(v?: number, maxFrac = 2) {
-  if (v == null) return "—";
-  return Number(v).toLocaleString(undefined, { maximumFractionDigits: maxFrac });
-}
-// device local time (UTC)
-function fmtHHmmLocal(ms: number) {
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
+type Props = {
+  data: any[];
+  xKey: string;
+  yKey: string;
+  yFormat?: "hashrate" | "number";
+  unit?: "H/s" | "Sol/s";
+  maxFrac?: number;
+  stepMinutes?: number;
+  labelEvery?: number;
+  carryForward?: boolean;
+};
 
-// ---------------- component
+const timeFmt = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 export default function ChartArea({
   data,
   xKey,
   yKey,
   yFormat = "hashrate",
+  unit = "H/s",
   maxFrac = 2,
   stepMinutes = 30,
   labelEvery = 60,
   carryForward = true,
-}: {
-  data: any[];
-  xKey: string;
-  yKey: string;
-  yFormat?: "hashrate" | "number";
-  maxFrac?: number;
-  stepMinutes?: number;
-  labelEvery?: number; // in minutes
-  carryForward?: boolean;
-}) {
-  const format = (v: number) =>
-    yFormat === "hashrate" ? fmtHashrateLocal(v) : fmtNumLocal(v, maxFrac);
+}: Props) {
+  const formatY = (v: number) =>
+    yFormat === "hashrate" ? fmtHashrateUnit(v, unit) : fmtNum(v, maxFrac);
 
-  // ---------- normalization + densification (local)
   const { series, xTicks } = useMemo(() => {
     const STEP = stepMinutes * 60 * 1000;
 
     const raw = (data ?? [])
-      .map(d => {
+      .map((d) => {
         const t0 = new Date(d?.[xKey]).getTime();
         if (!Number.isFinite(t0)) return null;
-        const t = t0 - (t0 % STEP);   // rounds down to the step
+        const t = t0 - (t0 % STEP);
         const v = Number(d?.[yKey]);
         return { t, v: Number.isFinite(v) ? v : null };
       })
@@ -67,17 +62,20 @@ export default function ChartArea({
     const byT = new Map<number, number | null>();
     for (const { t, v } of raw) byT.set(t, v);
 
-    const start = Math.min(...raw.map(d => d.t));
-    const end = Math.max(...raw.map(d => d.t));
+    const start = Math.min(...raw.map((d) => d.t));
+    const end = Math.max(...raw.map((d) => d.t));
 
     const ticks: number[] = [];
     for (let t = start - (start % STEP); t <= end; t += STEP) ticks.push(t);
 
     let last: number | null = null;
-    const out = ticks.map(t => {
+    const out = ticks.map((t) => {
       const v = byT.has(t) ? (byT.get(t) as number | null) : null;
       if (v != null) last = v;
-      return { [xKey]: t, [yKey]: carryForward ? last : v } as Record<string, number | null>;
+      return { [xKey]: t, [yKey]: carryForward ? last : v } as Record<
+        string,
+        number | null
+      >;
     });
 
     return { series: out, xTicks: ticks };
@@ -100,18 +98,23 @@ export default function ChartArea({
             dataKey={xKey}
             type="number"
             domain={["dataMin", "dataMax"]}
-            ticks={xTicks}           // grid each stepMinutes
+            ticks={xTicks}
             interval={0}
             minTickGap={0}
             tick={({ x, y, payload }) => {
               const ms = Number(payload.value);
               const m = new Date(ms).getMinutes();
-              // only write label when the minute is a multiple of labelEvery
-              const show = (labelEvery > 0) ? (m % labelEvery === 0) : true;
-              const label = show ? fmtHHmmLocal(ms) : "";
+              const show = labelEvery > 0 ? m % labelEvery === 0 : true;
               return (
-                <text x={x} y={y! + 14} textAnchor="middle" fill="currentColor" opacity={0.6} fontSize={12}>
-                  {label}
+                <text
+                  x={x}
+                  y={y! + 14}
+                  textAnchor="middle"
+                  fill="currentColor"
+                  opacity={0.6}
+                  fontSize={12}
+                >
+                  {show ? timeFmt.format(new Date(ms)) : ""}
                 </text>
               );
             }}
@@ -121,13 +124,13 @@ export default function ChartArea({
           <Tooltip
             contentStyle={{ background: "#10161e", border: "1px solid #1a2230", borderRadius: 12 }}
             labelStyle={{ color: "#9fb0c3" }}
-            labelFormatter={(label) => fmtHHmmLocal(Number(label))}
-            formatter={(v) => format(Number(v))}
+            labelFormatter={(label) => timeFmt.format(new Date(Number(label)))}
+            formatter={(v: any) => formatY(Number(v))}
           />
 
           <YAxis
             tick={{ fill: "currentColor", opacity: 0.6, fontSize: 12 }}
-            tickFormatter={format}
+            tickFormatter={formatY}
           />
 
           <Area

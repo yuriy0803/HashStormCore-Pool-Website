@@ -1,6 +1,7 @@
 // ui/components/PoolCardsWall.tsx
 import Link from "next/link";
 import Image from "next/image";
+import { coinIcon } from "@/lib/coins";
 import { api } from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 
@@ -18,9 +19,9 @@ function fmtMetric(v: number, unit: string) {
   const a = Math.abs(v);
   const steps = [
     { k: 1e12, s: "T" },
-    { k: 1e9,  s: "G" },
-    { k: 1e6,  s: "M" },
-    { k: 1e3,  s: "K" },
+    { k: 1e9, s: "G" },
+    { k: 1e6, s: "M" },
+    { k: 1e3, s: "K" },
   ];
   for (const st of steps) if (a >= st.k) return `${(v / st.k).toFixed(2)} ${st.s}${unit}`;
   return `${v.toFixed(2)} ${unit}`;
@@ -29,9 +30,8 @@ function fmtMetric(v: number, unit: string) {
 function Dot({ ok }: { ok: boolean }) {
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${
-        ok ? "bg-emerald-500" : "bg-red-500"
-      }`}
+      className={`inline-block h-2.5 w-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"
+        }`}
     />
   );
 }
@@ -40,7 +40,7 @@ export default async function PoolCardsWall() {
   // base list: never disappears (comes from core)
   const pools = await api.listPools().catch(() => []);
 
-  // attempts live snapshots (one per pool) — if it fails, the card becomes "Inactive"
+  // attempts live snapshots (one per pool) - if it fails, the card becomes "Inactive"
   const snaps = await Promise.all(
     pools.map(async (p: any) => {
       try {
@@ -84,18 +84,18 @@ export default async function PoolCardsWall() {
         const coinSym = p?.coin?.symbol || "";
 
         return (
-          <div key={p.id} className={`rounded-2xl border px-0 py-0 overflow-hidden ${
-            active ? "border-emerald-700/40" : "border-[var(--edge)]"
-          } bg-[var(--card)]`}>
+          <div key={p.id} className={`rounded-2xl border px-0 py-0 overflow-hidden ${active ? "border-emerald-700/40" : "border-[var(--edge)]"
+            } bg-[var(--card)]`}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--edge)]">
               <div className="flex items-center gap-2">
                 {p.coin?.name && (
                   <Image
-                    src={`/coins/${String(p.coin.name).toLowerCase()}.png`}
-                    alt={coinSym}
-                    width={20}
-                    height={20}
+                    src={coinIcon(p.coin?.symbol ?? p.coin?.name)}
+                    alt={(p.coin?.symbol ?? p.coin?.name) ?? "coin"}
+                    width={36}
+                    height={36}
+                    priority
                   />
                 )}
                 <div className="font-semibold">
@@ -119,21 +119,20 @@ export default async function PoolCardsWall() {
               <div className="flex justify-between">
                 <span className="text-[var(--muted)]">Luck</span>
                 <span>
-                  {s?.luckPercent != null ? `${fmtNum(s.luckPercent, 0)} %` : "—"}
+                  {s?.luckPercent != null ? `${fmtNum(s.luckPercent, 0)} %` : "-"}
                 </span>
               </div>
 
               <div className="flex justify-between">
                 <span className="text-[var(--muted)]">Minimum Payout</span>
                 <span>
-                  {minPayout != null ? `${fmtNum(minPayout)} ${coinSym}` : "—"}
+                  {minPayout != null ? `${fmtNum(minPayout)} ${coinSym}` : "-"}
                 </span>
               </div>
 
               <div className="flex justify-between">
                 <span className="text-[var(--muted)]">Payouts in Bitcoin</span>
                 <span>
-                  {/* ajusta se tiveres pools com payout BTC */}
                   No
                 </span>
               </div>

@@ -1,4 +1,4 @@
-// server.ts
+// ui/i18n/server.ts
 import {cookies, headers} from "next/headers";
 import en from "./messages/en";
 import pt from "./messages/pt";

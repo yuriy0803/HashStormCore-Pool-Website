@@ -35,7 +35,7 @@ export default function PoolPerfChart({ poolId }: { poolId: string }) {
     };
   }, [poolId]);
 
-  if (loading) return <div className="text-sm text-gray-500">Loading performance…</div>;
+  if (loading) return <div className="text-sm text-gray-500">Loading performance...</div>;
   if (!data.length) return <div className="text-sm text-gray-500">No data</div>;
 
   return (

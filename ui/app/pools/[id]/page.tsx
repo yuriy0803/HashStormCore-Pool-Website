@@ -1,26 +1,31 @@
-// ui/app/pools/[id]/page.tsx
-import { api } from "@/lib/api";
+import { api, toIso as toIsoApi } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
 import Stat from "@/components/Stat";
 import Link from "next/link";
-import { fmtHashrate, fmtNum } from "@/lib/format";
+import { fmtHashrateUnit, fmtNum } from "@/lib/format";
 import { tServer } from "@/i18n/server";
 import ChartArea from "@/components/ChartArea";
 import AutoRefresh from "@/components/AutoRefresh";
-import Image from "next/image";
 import LocalTime from "@/components/LocalTime";
+import LivePoolStats from "@/components/LivePoolStats";
+import Image from "next/image";
+import { coinIcon } from "@/lib/coins";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 type SearchParams = { [k: string]: string | string[] | undefined };
-
 const PAGE_SIZE = 10;
 
 function intParam(v: string | string[] | undefined, fallback = 1) {
   const n = Array.isArray(v) ? v[0] : v;
   const x = Number.parseInt(String(n ?? "")) || fallback;
   return Math.max(1, x);
+}
+
+// local proxy for api toIso
+function toIso(v: unknown) {
+  return toIsoApi(v as any);
 }
 
 export default async function PoolDetail({
@@ -33,11 +38,13 @@ export default async function PoolDetail({
   const tStat = tServer("Stat");
   const tPool = tServer("Pool");
 
-  // 1) pool + performance
+  // pool
   const pool = await api.getPool(params.id);
-  if (!pool) {
-    return <div className="text-[var(--muted)]">Pool not found.</div>;
-  }
+  if (!pool) return <div className="text-[var(--muted)]">Pool not found.</div>;
+
+  // SSR: snapshot + performance
+  let snapshot: any = null;
+  try { snapshot = await api.poolSnapshot(pool.id); } catch { }
   const perf = await api.getPoolPerformance(pool.id);
 
   const ports = Object.entries(pool.ports ?? {}).map(([port, cfg]) => ({
@@ -47,66 +54,80 @@ export default async function PoolDetail({
     varDiff: (cfg as any)?.varDiff,
   }));
 
+  const unit = (snapshot?.unit === "Sol/s" || snapshot?.unit === "H/s")
+    ? snapshot.unit
+    : (String(pool.coin?.family).toLowerCase() === "equihash" ? "Sol/s" : "H/s");
+
   // ---- pagination state
   const minersPage = intParam(searchParams?.minersPage, 1);
   const blocksPage = intParam(searchParams?.blocksPage, 1);
+  const blocksPageSize = intParam(searchParams?.blocksPageSize, PAGE_SIZE);
 
-  // ---- miners (24h top) - mem paging
-  const minersAll = await api.listPoolMiners(pool.id);
-  const minersTotal = minersAll.length;
-  const minersStart = (minersPage - 1) * PAGE_SIZE;
-  const miners = minersAll.slice(minersStart, minersStart + PAGE_SIZE);
-  const minersHasNext = minersStart + PAGE_SIZE < minersTotal;
-
-  // ---- blocks (uses endpoint pagination)
-  const blocksResp = await api.listPoolBlocks(pool.id, blocksPage, PAGE_SIZE);
+  // ---- blocks
+  const blocksResp = await api.listPoolBlocks(pool.id, blocksPage, blocksPageSize);
   const blocks = Array.isArray(blocksResp?.blocks) ? blocksResp.blocks : [];
-
-  const blocksHasNext = blocks.length === PAGE_SIZE;
+  const blocksTotal = Number(blocksResp?.total ?? 0);
+  const blocksHasNext = blocksPage * blocksPageSize < blocksTotal;
 
   const isSolo =
     (pool.paymentProcessing?.payoutScheme || "").toUpperCase() === "SOLO";
 
-  // helper build links
-  const qp = (sp: SearchParams, patch: Record<string, string | number>) => ({
-    pathname: `/pools/${pool.id}`,
-    query: { ...sp, ...patch },
+  // normalize blocks for render
+  const nBlocks = blocks.map((b: any, i: number) => {
+    const createdRaw =
+      b.created ?? b.createdAt ?? b.creationTime ?? b.timestamp ?? b.time ?? null;
+
+    return {
+      height: b.blockHeight ?? b.blockheight ?? b.height ?? null,
+      hash: b.transactionConfirmationData ?? b.blockHash ?? b.hash ?? null,
+      created: toIso(createdRaw),
+      status:
+        b.status ??
+        (b.confirmed === true
+          ? "confirmed"
+          : b.confirmed === false
+            ? "pending"
+            : undefined),
+    };
   });
 
-  // normalize blocks to render
-  const nBlocks = blocks.map((b: any) => ({
-    height: b.blockHeight ?? b.blockheight ?? b.height ?? null,
-    hash: b.transactionConfirmationData ?? b.blockHash ?? b.hash ?? null,
-    created: b.created ?? b.creationTime ?? b.timestamp ?? null,
-    status:
-      b.status ??
-      (b.confirmed === true
-        ? "confirmed"
-        : b.confirmed === false
-        ? "pending"
-        : undefined),
-    amount: b.amount ?? b.reward ?? b.value ?? undefined,
-    miner: b.miner ?? b.address ?? undefined,
-    efficiency: b.efficiency ?? b.effort ?? undefined,
-  }));
 
-  // perf data -> ChartArea
-  const perfData = (Array.isArray(perf) ? perf : []).map((p: any) => ({
-    t: p.created,
-    poolHashrate: Number(p.poolHashrate ?? 0),
-    connectedMiners: Number(p.connectedMiners ?? 0),
-  }));
 
+
+  // perf data -> ChartArea (x in epoch ms)
+  let perfData = (Array.isArray(perf) ? perf : [])
+    .map((p: any) => {
+      const iso = toIso(p.created ?? p.time ?? p.timestamp);
+      const t = iso ? new Date(iso).getTime() : undefined;
+      return {
+        t,
+        poolHashrate: Number(p.poolHashrate ?? 0),
+        connectedMiners: Number(p.connectedMiners ?? 0),
+      };
+    })
+    .filter((d) => typeof d.t === "number" && !Number.isNaN(d.t));
+
+  // fallback: if performance is empty, use a snapshot point (not to be blank graphic)
+  if (perfData.length === 0 && snapshot?.asOf && Number.isFinite(Number(snapshot?.currentHashrate))) {
+    perfData = [{
+      t: new Date(snapshot.asOf).getTime(),
+      poolHashrate: Number(snapshot.currentHashrate),
+      connectedMiners: Number(snapshot.minersOnline ?? 0),
+    }];
+  }
+
+  /********** FOR NON DEVS "SSR" MEANS SERVER SIDE RESPONSE **********/
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold flex items-center gap-2">
           {pool.coin?.name && (
             <Image
-              src={`/coins/${String(pool.coin.name).toLowerCase()}.png`}
-              alt={pool.coin.symbol ?? ""}
+              src={coinIcon(pool?.coin?.symbol)}
+              alt={pool?.coin?.symbol ?? "coin"}
               width={36}
               height={36}
+              priority
             />
           )}
           {pool.id.replaceAll("_", " ").toUpperCase()}
@@ -120,32 +141,29 @@ export default async function PoolDetail({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        <Stat
-          label={tStat("poolHashrate")}
-          value={fmtHashrate(pool.poolStats?.poolHashrate)}
-        />
-        <Stat
-          label={tStat("networkHashrate")}
-          value={fmtHashrate(pool.networkStats?.networkHashrate)}
-        />
-        <Stat
-          label={tStat("miners")}
-          value={fmtNum(pool.poolStats?.connectedMiners)}
-        />
-        <Stat
-          label={tStat("netDifficulty")}
-          value={fmtNum(pool.networkStats?.networkDifficulty)}
-        />
-      </div>
+      {/* KPIs LIVE with initial SSR */}
+      <LivePoolStats
+        poolId={pool.id}
+        unit={unit}
+        refreshSec={15}
+        initial={{
+          unit,
+          currentHashrate: Number(snapshot?.currentHashrate ?? 0),
+          minersOnline: Number(snapshot?.minersOnline ?? 0),
+          network: {
+            hashrate: Number(snapshot?.network?.hashrate ?? 0),
+            difficulty: Number(snapshot?.network?.difficulty ?? 0),
+          },
+        }}
+      />
 
       {/* How to connect */}
       <section>
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
           <h3 className="font-semibold mb-2">How to connect</h3>
           <p className="text-sm text-sub mb-3">
-            Use your <b>wallet address</b> as username and any password (e.g.{" "}
-            <code>x</code>). Choose one of the endpoints:
+            Use your <b>wallet address</b> as username and any password (e.g. <code>x</code>).
+            Choose one of the endpoints:
           </p>
           <ul className="text-sm space-y-1">
             {ports.map((p) => (
@@ -154,8 +172,7 @@ export default async function PoolDetail({
                   stratum+{p.tls ? "ssl" : "tcp"}://
                   {pool.coin?.symbol?.toLowerCase()}.hashstorm.org:{p.port}
                 </code>{" "}
-                | Minimum Payout {fmtNum(pool.paymentProcessing?.minimumPayment)}{" "}
-                {pool.coin?.symbol}
+                | Minimum Payout {fmtNum(pool.paymentProcessing?.minimumPayment)} {pool.coin?.symbol}
               </li>
             ))}
           </ul>
@@ -170,10 +187,14 @@ export default async function PoolDetail({
           xKey="t"
           yKey="poolHashrate"
           yFormat="hashrate"
+          unit={unit}
           carryForward
+          stepMinutes={60}
+          labelEvery={60}
         />
-        <AutoRefresh intervalMs={300_000} />
+        <AutoRefresh intervalMs={300000} />
       </section>
+
 
       {/* Ports */}
       <section className="space-y-3">
@@ -194,11 +215,7 @@ export default async function PoolDetail({
               <tr key={p.port}>
                 <Td>{p.port}</Td>
                 <Td>{p.difficulty ?? "var"}</Td>
-                <Td>
-                  {p.varDiff
-                    ? `${p.varDiff.minDiff} - ${p.varDiff.maxDiff}`
-                    : "-"}
-                </Td>
+                <Td>{p.varDiff ? `${p.varDiff.minDiff} - ${p.varDiff.maxDiff}` : "-"}</Td>
                 <Td>{p.varDiff ? `${p.varDiff.targetTime}s` : "-"}</Td>
                 <Td>{p.tls ? tServer("Common")("yes") : tServer("Common")("no")}</Td>
                 <Td>
@@ -213,28 +230,76 @@ export default async function PoolDetail({
         </Table>
       </section>
 
-      {/* Top Miners (se disponíveis) */}
-      {Array.isArray(pool.topMiners) && pool.topMiners.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-semibold">{tPool("topMiners")}</h2>
-          {async function TopMinersTable() {
-            const rows = isSolo
-              ? pool.topMiners!.map((m: any) => ({
-                  ...m,
-                  pendingShares: undefined,
-                }))
-              : await Promise.all(
-                  pool.topMiners!.map(async (m: any) => {
-                    try {
-                      const d = await api.minerInPool(pool.id, m.miner);
-                      return { ...m, pendingShares: d?.pendingShares };
-                    } catch {
-                      return { ...m, pendingShares: undefined };
-                    }
-                  })
-                );
+      {/* All Miners (LIVE) */}
+      <section className="space-y-2">
+        <h2 className="font-semibold">All {tStat("miners")} (live)</h2>
+        {await (async () => {
+          // -------- pagination --------
+          const PAGE_MINERS =
+            Number(Array.isArray(searchParams?.minersPageSize) ? searchParams!.minersPageSize[0] : searchParams?.minersPageSize) || PAGE_SIZE; // default 10
+          const page = minersPage;
+          const start = (page - 1) * PAGE_MINERS;
+          const end = start + PAGE_MINERS;
 
-            return (
+          // ------- live data source -------- 
+          let liveTop: any = null;
+          try {
+            // 5 Min window (300s)
+            // NOTE: the endpoint has no offset, ##### get more (high limit) and do slice here. #####
+            liveTop = await api.poolTopMiners(pool.id, 300, 10000);
+          } catch {
+            liveTop = null;
+          }
+
+          const liveItems: any[] = Array.isArray(liveTop?.items) ? liveTop.items : [];
+          const liveUnit: "H/s" | "Sol/s" =
+            (pool.coin?.algorithm || "").toLowerCase().includes("equihash") ? "Sol/s" : "H/s";
+
+          // fallback for /pools/{id}/miners if top-miners fails
+          const baseRows =
+            liveItems.length > 0
+              ? liveItems.map((m: any) => ({ miner: m.address }))
+              : (await api.listPoolMiners(pool.id)).map((m: any) => ({ miner: m.miner }));
+
+          const total = baseRows.length;
+          const pageSlice = baseRows.slice(start, end);
+          const hasPrev = page > 1;
+          const hasNext = end < total;
+
+          // --------- fetch snapshots from 10 visible ----------
+          const rows = await Promise.all(
+            pageSlice.map(async (m) => {
+              try {
+                const snap = await api.minerSnapshot(pool.id, m.miner);
+                return {
+                  miner: m.miner,
+                  hashrate: Number(snap?.currentHashrate ?? 0),
+                  sharesPerSecond: snap?.sharesPerSec ?? snap?.sharesPerSecond ?? null,
+                };
+              } catch {
+                return { miner: m.miner, hashrate: 0, sharesPerSecond: null };
+              }
+            })
+          );
+
+          // helper to keep the other query params
+          const withQuery = (overrides: Record<string, any>) => ({
+            pathname: `/pools/${pool.id}`,
+            query: {
+              ...searchParams,
+              ...overrides,
+            },
+          });
+
+          const from = total === 0 ? 0 : start + 1;
+          const to = Math.min(end, total);
+
+          return (
+            <>
+              <div className="text-sm text-sub">
+                {total === 0 ? "No miners online." : `Showing ${from}-${to} of ${total}`}
+              </div>
+
               <Table>
                 <thead>
                   <tr>
@@ -245,188 +310,162 @@ export default async function PoolDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((m: any) => (
-                    <tr key={m.miner}>
-                      <Td>
-                        <Link
-                          className="underline"
-                          href={`/pools/${pool.id}/miners/${m.miner}`}
-                        >
-                          {m.miner}
-                        </Link>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <Td colSpan={isSolo ? 3 : 4} className="text-sm text-sub">
+                        No miners online.
                       </Td>
-                      <Td>{fmtHashrate(m.hashrate)}</Td>
-                      <Td>{fmtNum(m.sharesPerSecond, 4)}</Td>
-                      {!isSolo && (
-                        <Td>
-                          {m.pendingShares != null
-                            ? fmtNum(m.pendingShares, 4)
-                            : "-"}
-                        </Td>
-                      )}
                     </tr>
-                  ))}
+                  ) : (
+                    rows.map((m) => (
+                      <tr key={m.miner}>
+                        <Td>
+                          <Link className="underline" href={`/pools/${pool.id}/miners/${m.miner}`}>
+                            {m.miner}
+                          </Link>
+                        </Td>
+                        <Td>{fmtHashrateUnit(m.hashrate, liveUnit)}</Td>
+                        <Td>{m.sharesPerSecond != null ? fmtNum(m.sharesPerSecond, 4) : "-"}</Td>
+                        {!isSolo && <Td>-</Td>}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </Table>
-            );
-          }()}
-        </section>
-      )}
 
-      {/* All Miners (paginated) */}
-      <section className="space-y-2">
-        <h2 className="font-semibold">All {tStat("miners")}</h2>
-        <Table>
-          <thead>
-            <tr>
-              <Th>{tPool("table.miner")}</Th>
-              <Th>{tPool("table.hashrate")}</Th>
-              <Th>{tPool("table.sharesS")}</Th>
-              {!isSolo && <Th>{tPool("table.pendingShares")}</Th>}
-            </tr>
-          </thead>
-          <tbody>
-            {miners.length === 0 ? (
-              <tr>
-                <Td colSpan={isSolo ? 3 : 4} className="text-sm text-sub">
-                  No miners yet.
-                </Td>
-              </tr>
-            ) : (
-              miners.map((m: any) => (
-                <tr key={m.miner}>
-                  <Td>
-                    <Link
-                      className="underline"
-                      href={`/pools/${pool.id}/miners/${m.miner}`}
-                    >
-                      {m.miner}
+              <div className="flex items-center justify-between text-sm">
+                <div className="space-x-3">
+                  <div className="text-sm text-sub">
+                    <span>Page {page}
+                      <br></br>
+                      Per page:{" "}
+                      <Link className="underline" href={withQuery({ minersPageSize: 10, minersPage: 1 })}>10</Link>{" "}
+                      · <Link className="underline" href={withQuery({ minersPageSize: 25, minersPage: 1 })}>25</Link>{" "}
+                      · <Link className="underline" href={withQuery({ minersPageSize: 50, minersPage: 1 })}>50</Link>
+                    </span>
+                  </div>
+                </div>
+                <div className="space-x-2">
+                  {hasPrev && (
+                    <Link className="underline" href={withQuery({ minersPage: page - 1 })}>
+                      Prev
                     </Link>
-                  </Td>
-                  <Td>{fmtHashrate(m.hashrate)}</Td>
-                  <Td>{fmtNum(m.sharesPerSecond, 4)}</Td>
-                  {!isSolo && (
-                    <Td>
-                      {m.pendingShares != null ? fmtNum(m.pendingShares, 4) : "-"}
-                    </Td>
                   )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-        <div className="flex items-center justify-between text-sm">
-          <div>Page {minersPage}</div>
-          <div className="space-x-2">
-            {minersPage > 1 && (
-              <Link
-                className="underline"
-                href={qp(searchParams, { minersPage: minersPage - 1 })}
-              >
-                Prev
-              </Link>
-            )}
-            {minersHasNext && (
-              <Link
-                className="underline"
-                href={qp(searchParams, { minersPage: minersPage + 1 })}
-              >
-                Next
-              </Link>
-            )}
-          </div>
-        </div>
+                  {hasNext && (
+                    <Link className="underline" href={withQuery({ minersPage: page + 1 })}>
+                      Next
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       {/* Last Blocks (paginated) */}
       <section className="space-y-2">
         <h2 className="font-semibold">Last {tPool("links.blocks")}</h2>
-        <Table>
-          <thead>
-            <tr>
-              <Th>{tPool("table.height")}</Th>
-              <Th>{tPool("table.hash")}</Th>
-              <Th>{tPool("table.date")}</Th>
-              <Th>{tPool("table.status")}</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {nBlocks.length === 0 ? (
-              <tr>
-                <Td colSpan={4} className="text-sm text-sub">
-                  No blocks yet.
-                </Td>
-              </tr>
-            ) : (
-              nBlocks.map((b: any, i: number) => (
-                <tr key={(b.hash ?? "") + (b.height ?? i)}>
-                  <Td suppressHydrationWarning>
-                    {b.height != null ? `#${b.height}` : "-"}
-                  </Td>
-                  <Td className="truncate max-w-[320px]">
-                    {b.hash ? (
-                      <Link
-                        className="underline"
-                        href={`/pools/${pool.id}/blocks`}
-                      >
-                        {b.hash}
-                      </Link>
-                    ) : (
-                      "-"
-                    )}
-                  </Td>
-                  <Td>
-                    <LocalTime iso={b.created} fallback="" />
-                  </Td>
-                  <Td>{b.status ?? "-"}</Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-        <div className="flex items-center justify-between text-sm">
-          <div>Page {blocksPage}</div>
-          <div className="space-x-2">
-            {blocksPage > 1 && (
-              <Link
-                className="underline"
-                href={qp(searchParams, { blocksPage: blocksPage - 1 })}
-              >
-                Prev
-              </Link>
-            )}
-            {blocksHasNext && (
-              <Link
-                className="underline"
-                href={qp(searchParams, { blocksPage: blocksPage + 1 })}
-              >
-                Next
-              </Link>
-            )}
-          </div>
-        </div>
+
+        {(() => {
+          const from = blocksTotal === 0 ? 0 : (blocksPage - 1) * blocksPageSize + 1;
+          const to = Math.min(blocksPage * blocksPageSize, blocksTotal);
+
+          const withQuery = (overrides: Record<string, any>) => ({
+            pathname: `/pools/${pool.id}`,
+            query: { ...searchParams, ...overrides },
+          });
+
+          return (
+            <>
+              <div className="text-sm text-sub">
+                {blocksTotal === 0 ? "No blocks yet." : `Showing ${from}-${to} of ${blocksTotal}`}
+              </div>
+
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>{tPool("table.height")}</Th>
+                    <Th>{tPool("table.hash")}</Th>
+                    <Th>{tPool("table.date")}</Th>
+                    <Th>{tPool("table.status")}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blocks.length === 0 ? (
+                    <tr>
+                      <Td colSpan={4} className="text-sm text-sub">No blocks yet.</Td>
+                    </tr>
+                  ) : (
+                    nBlocks.map((b: any, i: number) => (
+                      <tr key={`${b.hash ?? ""}-${b.height ?? i}`}>
+                        <Td>{b.height != null ? `#${b.height}` : "-"}</Td>
+                        <Td className="truncate max-w-[420px]">
+                          {b.hash ? (
+                            <Link className="underline" href={`/pools/${pool.id}/blocks`}>
+                              {b.hash}
+                            </Link>
+                          ) : ("-")}
+                        </Td>
+                        <Td suppressHydrationWarning>
+                          <LocalTime iso={b.created} fallback="-" />
+                        </Td>
+                        <Td>{b.status ?? "-"}</Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+
+              <div className="flex items-center justify-between text-sm">
+                <div className="space-x-3">
+                  <div className="text-sm text-sub">
+                    <span>Page {blocksPage}
+                      <br></br>
+                      Per page:{" "}
+                      <Link className="underline" href={withQuery({ blocksPageSize: 10, blocksPage: 1 })}>10</Link>{" "}
+                      · <Link className="underline" href={withQuery({ blocksPageSize: 25, blocksPage: 1 })}>25</Link>{" "}
+                      · <Link className="underline" href={withQuery({ blocksPageSize: 50, blocksPage: 1 })}>50</Link>
+                    </span>
+                  </div>
+                </div>
+                <div className="space-x-2">
+                  {blocksPage > 1 && (
+                    <Link className="underline" href={withQuery({ blocksPage: blocksPage - 1 })}>
+                      Prev
+                    </Link>
+                  )}
+                  {blocksHasNext && (
+                    <Link className="underline" href={withQuery({ blocksPage: blocksPage + 1 })}>
+                      Next
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {/* light refreshment of block listing */}
+              <AutoRefresh everySec={60} />
+            </>
+          );
+        })()}
       </section>
+
 
       {/* Pool info */}
       <section className="space-y-2">
-        <h2 className="font-semibold">{tPool("sections.pool")}</h2>
+        <h2 className="font-semibold">{tPool("sections.poolinfo")}</h2>
 
         <div className="text-sm text-sub">
           Pool Address:{" "}
           {pool.address ? (
-            <a
-              className="underline"
-              href={pool.addressInfoLink}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a className="underline" href={pool.addressInfoLink} target="_blank" rel="noreferrer">
               {pool.address}
             </a>
           ) : (
             "-"
           )}{" "}
           • Last block:{" "}
-          <LocalTime iso={pool.networkStats?.lastNetworkBlockTime} fallback="" /> (
+          <LocalTime iso={toIso(pool.networkStats?.lastNetworkBlockTime)} fallback="-" /> (
           #{pool.networkStats?.blockHeight ?? "-"})
         </div>
 

@@ -1,9 +1,8 @@
-// ui/app/allpools/page.tsx
-
 import { api } from "@/lib/api";
 import CoinCard from "@/components/CoinCard";
 import Stat from "@/components/Stat";
 import { tServer } from "@/i18n/server";
+import AutoRefresh from "@/components/AutoRefresh";
 
 export const revalidate = 0;
 
@@ -27,7 +26,6 @@ export default async function allpoolsPage() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([symbol, { name, count }]) => ({ symbol, name, count }));
 
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -40,6 +38,9 @@ export default async function allpoolsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map(x => <CoinCard key={x.symbol} symbol={x.symbol} name={x.name} count={x.count} />)}
       </div>
+
+      {/* soft refresh */}
+      <AutoRefresh everySec={60} />
     </div>
   );
 }

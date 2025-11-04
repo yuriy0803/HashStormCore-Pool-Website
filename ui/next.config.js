@@ -1,42 +1,35 @@
-// next.config.js
-const isDev = process.env.NODE_ENV !== "production";
-
 /** @type {import('next').NextConfig} */
-module.exports = {
+const nextConfig = {
+  reactStrictMode: true,
+
   async rewrites() {
-    return [
-      {
-        source: "/api/:path*",                        // browser
-        destination: "http://192.168.1.169:4000/api/:path*", // Next path
-      },
-    ];
+    return [];
   },
 
-  //
+  // Minimum security headers; CSP allows connection to /api and websockets.
   async headers() {
-    if (!isDev) return [];
     return [
       {
-        source: "/:path*",
+        source: "/(.*)",
         headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "accelerometer=(), autoplay=(), camera=(), geolocation=(), microphone=()" },
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval'",      // only in dev
+              "script-src 'self' 'unsafe-eval'",            // dev needs this.
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
-              "connect-src 'self' " + process.env.MININGCORE_INTERNAL_API_URL,
-            ].join("; "),
-          },
-        ],
-      },
+              "connect-src 'self' /api ws: wss:",
+            ].join("; ")
+          }
+        ]
+      }
     ];
   },
-
-  // avoid devtool based on eval
-  webpack(config, { dev }) {
-    if (dev) config.devtool = "cheap-module-source-map";
-    return config;
-  },
 };
+
+module.exports = nextConfig;

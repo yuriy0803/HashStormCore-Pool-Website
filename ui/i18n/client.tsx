@@ -1,4 +1,4 @@
-// client.tsx
+// ui/i18n/client.tsx
 "use client";
 
 import {createContext, use, ReactNode, useMemo} from "react";

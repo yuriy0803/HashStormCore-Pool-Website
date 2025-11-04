@@ -23,7 +23,7 @@ export default function MinerLookupPage({
           </div>
         ) : (
           <div className="rounded border p-4 bg-blue-50">
-            <p>Searching miner <code className="px-2 py-1 bg-white border rounded">{address}</code>…</p>
+            <p>Searching miner <code className="px-2 py-1 bg-white border rounded">{address}</code>...</p>
             <p className="mt-2">You should be redirected automatically from the header search.</p>
           </div>
         )

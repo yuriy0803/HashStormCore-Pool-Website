@@ -1,3 +1,4 @@
+// ui/lib/types.ts
 export type VarDiff = {
   minDiff: number; maxDiff: number; maxDelta: number;
   targetTime: number; retargetTime: number; variancePercent: number;

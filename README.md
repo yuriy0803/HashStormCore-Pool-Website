@@ -9,51 +9,7 @@ NOTE: no need to change code when adding new pools.
 
 ## Features
 
-- Dynamic Dashboard - lists all pools from the /api/pools endpoint.
-- Individual Pool Page - statistics, graphs, ports, top miners, and coin links.
-- Miners & Workers - listing and details of each miner (with performance history).
-- Blocks & Payouts - tables of mined blocks and payouts.
-- Real-time Charts - pool and miner performance (via Recharts). - Minimalist and responsive Dark UI (Tailwind).
-- Direct integration with Miningcore - just point to the API URL.
-
----
-
-## Structure
-
-```
-ui/
-├─ app/
-│ ├─ page.tsx # Dashboard (todas as pools)
-│ ├─ pools/
-│ │ ├─ page.tsx # Lista de pools
-│ │ └─ [id]/ # Pool dinâmica
-│ │ ├─ page.tsx # Detalhe da pool
-│ │ ├─ miners/
-│ │ │ ├─ page.tsx # Lista de miners
-│ │ │ └─ [address]/page.tsx # Detalhe de miner
-│ │ ├─ blocks/page.tsx # Blocos minerados
-│ │ └─ payments/page.tsx # Pagamentos da pool
-│ └─ miner/page.tsx # Lookup rápido de miner
-│
-├─ components/
-│ ├─ Header.tsx
-│ ├─ PoolCard.tsx
-│ ├─ Stat.tsx
-│ ├─ Table.tsx
-│ └─ ChartArea.tsx # Gráficos (Recharts)
-│
-├─ lib/
-│ ├─ api.ts # Chamadas à Miningcore API
-│ ├─ types.ts # Tipos (Pool, Miner, Block...)
-│ └─ format.ts # Helpers (hashrate, números, datas)
-│
-├─ public/logo.svg
-├─ .env.local
-├─ package.json
-├─ next.config.mjs
-├─ tailwind.config.ts
-└─ postcss.config.js
-```
+- TODO (new changes made)
 
 ---
 
@@ -74,7 +30,7 @@ npm install
 
 3. Create .env.local
 
-NEXT_PUBLIC_MININGCORE_API_URL=http://YOUR-API-CONNECTION:PORT/api
+TODO (new changes)
 
 
 4. Start in development mode
@@ -120,6 +76,8 @@ The UI communicates with the following standard endpoints:
 
 ### Payments made
 /api/pools/{id}/payments
+
+### TODO ADD NEW ENDPOINTS CREATED
 
 #### NOTE: When you add a new pool to Miningcore's config.json, it will automatically appear on the website.
 

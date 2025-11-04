@@ -1,3 +1,4 @@
+// ui/i18n/messages/en.ts
 const en = {
   Common: {
     search: "Search",
@@ -25,6 +26,7 @@ const en = {
     endpoint: "stratum+tcp://coin.hashstorm.org:PORT"
   },
   Stat: {
+    coins: "Coins",
     pools: "Pools",
     connectedMiners: "Connected miners",
     totalHashrate: "Total hashrate",

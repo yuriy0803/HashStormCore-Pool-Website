@@ -1,3 +1,5 @@
+// ui/i18n/messages/pt.ts
+
 const pt = {
   Common: {
     search: "Procurar",
@@ -77,6 +79,7 @@ const pt = {
     sections: {
       ports: "Portas",
       pool: "Pool",
+      poolinfo: "Pool Info",
       community: "Comunidade",
       hashrateHistory: "Hashrate (Histórico)",
       workersSnapshot: "Workers (snapshot {date})"

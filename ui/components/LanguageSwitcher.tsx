@@ -47,7 +47,7 @@ export default function LanguageSwitcher() {
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        {/* usar country, não code */}
+        {/* use country, not code */}
         <Flag country={current.flagCountry} />
         <span className="text-sm">{t(NAME_KEY[lang])}</span>
         <svg width="14" height="14" viewBox="0 0 20 20" className="opacity-70" aria-hidden="true">
@@ -67,7 +67,7 @@ export default function LanguageSwitcher() {
                 onClick={() => setLang(o.code)}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-card/60"
               >
-                {/* usar country, não code */}
+                {/* use country, not code */}
                 <Flag country={o.flagCountry} />
                 <span className="text-sm">{t(NAME_KEY[o.code])}</span>
               </button>

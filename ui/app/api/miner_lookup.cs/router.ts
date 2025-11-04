@@ -1,7 +1,7 @@
 // ui/app/api/miner-lookup/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// Server-only base. Do not use NEXT_PUBLIC here.
+// Server-only base. DANGER Do not use NEXT_PUBLIC here.
 const BASE = (process.env.MININGCORE_INTERNAL_API_URL || "").replace(/\/$/, "");
 const TIMEOUT_MS = 3500;
 

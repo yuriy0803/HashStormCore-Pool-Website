@@ -1,41 +1,92 @@
 // ui/app/pools/[id]/blocks/page.tsx
 import { api } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
-import { fmtNum, fmtISO, short } from "@/lib/format";
 import { tServer } from "@/i18n/server";
+import Link from "next/link";
+import LocalTime from "@/components/LocalTime";
 
-export const revalidate = 0;
+export const revalidate = 0; // Disable caching for live data
+export const dynamic = "force-dynamic";
 
-export default async function PoolBlocks({ params }: { params: { id: string }}) {
+const PAGE_SIZE = 20;
+
+export default async function PoolBlocks({
+  params,
+}: {
+  params: { id: string };
+}) {
   const tPool = tServer("Pool");
-  const blocks = await api.listPoolBlocks(params.id);
+
+  // Fetch pool info
+  const pool = await api.getPool(params.id);
+  if (!pool)
+    return (
+      <div className="text-[var(--muted)]">
+        Pool not found.
+      </div>
+    );
+
+  // Fetch last blocks for this pool (API already normalizes date to ISO)
+  const { blocks } = await api.listPoolBlocks(pool.id, 1, PAGE_SIZE);
+
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Blocks - {params.id}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">
+          Blocks - {pool.id}
+        </h1>
+      </div>
+
       <Table>
         <thead>
           <tr>
-            <Th>{tPool("table.height")}</Th>
-            <Th>{tPool("table.status")}</Th>
-            <Th>{tPool("table.efficiency")}</Th>
-            <Th>{tPool("table.miner")}</Th>
-            <Th>{tPool("table.amount")}</Th>
-            <Th>{tPool("table.hash")}</Th>
-            <Th>{tPool("table.date")}</Th>
+            <Th>{tPool("table.height") ?? "Height"}</Th>
+            <Th>{tPool("table.hash") ?? "Hash"}</Th>
+            <Th>{tPool("table.date") ?? "Date"}</Th>
+            <Th>{tPool("table.status") ?? "Status"}</Th>
           </tr>
         </thead>
+
         <tbody>
-          {blocks.map(b => (
-            <tr key={`${b.blockHeight}-${b.hash}`}>
-              <Td>#{b.blockHeight}</Td>
-              <Td>{b.status}</Td>
-              <Td>{fmtNum(b.effort, 4)}</Td>
-              <Td className="break-all">{b.miner}</Td>
-              <Td>{fmtNum(b.reward, 8)}</Td>
-              <Td><code className="text-xs">{short(b.hash, 18)}</code></Td>
-              <Td>{fmtISO(b.created)}</Td>
+          {!blocks || blocks.length === 0 ? (
+            <tr>
+              <Td
+                colSpan={4}
+                className="text-center py-6 text-sm opacity-70"
+              >
+                {tPool("empty.blocks") ?? "No blocks to show yet."}
+              </Td>
             </tr>
-          ))}
+          ) : (
+            blocks.map((b: any, i: number) => (
+              <tr key={`${b.hash ?? ""}${b.blockHeight ?? i}`}>
+                <Td suppressHydrationWarning>
+                  {b.blockHeight != null ? `#${b.blockHeight}` : "-"}
+                </Td>
+
+                <Td className="truncate max-w-[420px]">
+                  {b.hash ? (
+                    <Link
+                      href={`/pools/${pool.id}/blocks`}
+                      className="underline hover:text-[var(--primary)] transition-colors"
+                    >
+                      {b.hash}
+                    </Link>
+                  ) : (
+                    "-"
+                  )}
+                </Td>
+
+                <Td suppressHydrationWarning>
+                  <LocalTime
+                    iso={b.created} fallback="-"
+                  />
+                </Td>
+
+                <Td>{b.status ?? "-"}</Td>
+              </tr>
+            ))
+          )}
         </tbody>
       </Table>
     </div>
