@@ -1,4 +1,4 @@
-import { api, toIso as toIsoApi } from "@/lib/api";
+import { api, fmtIsoToLocal, toIso as toIsoApi, LIVE_WINDOW_SEC } from "@/lib/api";
 import { Table, Th, Td } from "@/components/Table";
 import Stat from "@/components/Stat";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import LocalTime from "@/components/LocalTime";
 import LivePoolStats from "@/components/LivePoolStats";
 import Image from "next/image";
 import { coinIcon } from "@/lib/coins";
+import { diff } from "util";
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -74,13 +75,16 @@ export default async function PoolDetail({
 
   // normalize blocks for render
   const nBlocks = blocks.map((b: any, i: number) => {
-    const createdRaw =
-      b.created ?? b.createdAt ?? b.creationTime ?? b.timestamp ?? b.time ?? null;
 
     return {
-      height: b.blockHeight ?? b.blockheight ?? b.height ?? null,
-      hash: b.transactionConfirmationData ?? b.blockHash ?? b.hash ?? null,
-      created: toIso(createdRaw),
+      height: b.blockHeight ?? null,
+      diff: b.networkDifficulty ?? null,
+      transactionConfirmationData: b.transactionConfirmationData ?? null,
+      hash: b.hash ?? null,
+      created: b.created ?? null,
+      reward: b.reward ?? null,
+      effort: b.effort ?? null,
+      minerEffort: b.minerEffort ?? null,
       status:
         b.status ??
         (b.confirmed === true
@@ -145,7 +149,6 @@ export default async function PoolDetail({
       <LivePoolStats
         poolId={pool.id}
         unit={unit}
-        refreshSec={15}
         initial={{
           unit,
           currentHashrate: Number(snapshot?.currentHashrate ?? 0),
@@ -192,7 +195,7 @@ export default async function PoolDetail({
           stepMinutes={60}
           labelEvery={60}
         />
-        <AutoRefresh intervalMs={300000} />
+        <AutoRefresh intervalMs={15000} />
       </section>
 
 
@@ -245,8 +248,8 @@ export default async function PoolDetail({
           let liveTop: any = null;
           try {
             // 5 Min window (300s)
-            // NOTE: the endpoint has no offset, ##### get more (high limit) and do slice here. #####
-            liveTop = await api.poolTopMiners(pool.id, 300, 10000);
+            // 10 Min window (600s)
+            liveTop = await api.poolTopMiners(pool.id, LIVE_WINDOW_SEC, 10000);
           } catch {
             liveTop = null;
           }
@@ -255,34 +258,48 @@ export default async function PoolDetail({
           const liveUnit: "H/s" | "Sol/s" =
             (pool.coin?.algorithm || "").toLowerCase().includes("equihash") ? "Sol/s" : "H/s";
 
-          // fallback for /pools/{id}/miners if top-miners fails
+          // base rows (endereços)
           const baseRows =
             liveItems.length > 0
               ? liveItems.map((m: any) => ({ miner: m.address }))
               : (await api.listPoolMiners(pool.id)).map((m: any) => ({ miner: m.miner }));
 
-          const total = baseRows.length;
-          const pageSlice = baseRows.slice(start, end);
-          const hasPrev = page > 1;
-          const hasNext = end < total;
+          // paginação "grossa"
+          const sliceForCalls = baseRows.slice(start, end);
 
-          // --------- fetch snapshots from 10 visible ----------
+          // --------- fetch snapshots dos visíveis ----------
           const rows = await Promise.all(
-            pageSlice.map(async (m) => {
+            sliceForCalls.map(async (m) => {
               try {
+                // tenta live snapshot para decidir online/hashrate de forma fiável
+                const liveSnap = await api.minerSnapshot?.(pool.id, m.miner, LIVE_WINDOW_SEC).catch(() => null);
+                if (liveSnap) {
+                  return {
+                    miner: m.miner,
+                    hashrate: Number(liveSnap.currentHashrate ?? 0),
+                    sharesPerSecond: Number(liveSnap.sharesPerSec ?? liveSnap.sharesPerSecond ?? 0),
+                    online: !!liveSnap.online,
+                  };
+                }
+
+                // fallback para snapshot "normal"
                 const snap = await api.minerSnapshot(pool.id, m.miner);
                 return {
                   miner: m.miner,
                   hashrate: Number(snap?.currentHashrate ?? 0),
-                  sharesPerSecond: snap?.sharesPerSec ?? snap?.sharesPerSecond ?? null,
+                  sharesPerSecond: Number(snap?.sharesPerSec ?? snap?.sharesPerSecond ?? 0),
+                  online: undefined,
                 };
               } catch {
-                return { miner: m.miner, hashrate: 0, sharesPerSecond: null };
+                return { miner: m.miner, hashrate: 0, sharesPerSecond: 0, online: undefined };
               }
             })
           );
 
-          // helper to keep the other query params
+          // filtra miners com hashrate == 0 E shares == 0 (esconde "fantasmas")
+          const rowsFiltered = rows.filter(r => (r.hashrate ?? 0) > 0 || (r.sharesPerSecond ?? 0) > 0);
+
+          // helper para manter os outros query params
           const withQuery = (overrides: Record<string, any>) => ({
             pathname: `/pools/${pool.id}`,
             query: {
@@ -291,13 +308,18 @@ export default async function PoolDetail({
             },
           });
 
-          const from = total === 0 ? 0 : start + 1;
-          const to = Math.min(end, total);
+          // contagem e paginação visível baseada no filtrado
+          const total = liveItems.length > 0
+            ? liveItems.length // quando temos liveTop, já vem "limpo" normalmente
+            : rowsFiltered.length; // fallback: conta os não-zero na página
+
+          const hasPrev = page > 1;
+          const hasNext = baseRows.length > end; // mantém navegação simples
 
           return (
             <>
               <div className="text-sm text-sub">
-                {total === 0 ? "No miners online." : `Showing ${from}-${to} of ${total}`}
+                {rowsFiltered.length === 0 ? "No miners online." : `Showing ${rowsFiltered.length > 0 ? start + 1 : 0}-${Math.min(end, start + rowsFiltered.length)} of ${total}`}
               </div>
 
               <Table>
@@ -310,14 +332,14 @@ export default async function PoolDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 ? (
+                  {rowsFiltered.length === 0 ? (
                     <tr>
                       <Td colSpan={isSolo ? 3 : 4} className="text-sm text-sub">
                         No miners online.
                       </Td>
                     </tr>
                   ) : (
-                    rows.map((m) => (
+                    rowsFiltered.map((m) => (
                       <tr key={m.miner}>
                         <Td>
                           <Link className="underline" href={`/pools/${pool.id}/miners/${m.miner}`}>
@@ -325,7 +347,7 @@ export default async function PoolDetail({
                           </Link>
                         </Td>
                         <Td>{fmtHashrateUnit(m.hashrate, liveUnit)}</Td>
-                        <Td>{m.sharesPerSecond != null ? fmtNum(m.sharesPerSecond, 4) : "-"}</Td>
+                        <Td>{m.sharesPerSecond ? fmtNum(m.sharesPerSecond, 4) : "-"}</Td>
                         {!isSolo && <Td>-</Td>}
                       </tr>
                     ))
@@ -337,7 +359,7 @@ export default async function PoolDetail({
                 <div className="space-x-3">
                   <div className="text-sm text-sub">
                     <span>Page {page}
-                      <br></br>
+                      <br />
                       Per page:{" "}
                       <Link className="underline" href={withQuery({ minersPageSize: 10, minersPage: 1 })}>10</Link>{" "}
                       · <Link className="underline" href={withQuery({ minersPageSize: 25, minersPage: 1 })}>25</Link>{" "}
@@ -388,6 +410,8 @@ export default async function PoolDetail({
                     <Th>{tPool("table.height")}</Th>
                     <Th>{tPool("table.hash")}</Th>
                     <Th>{tPool("table.date")}</Th>
+                    <Th>Miner Effort</Th>
+                    <Th>Reward</Th>
                     <Th>{tPool("table.status")}</Th>
                   </tr>
                 </thead>
@@ -408,9 +432,11 @@ export default async function PoolDetail({
                           ) : ("-")}
                         </Td>
                         <Td suppressHydrationWarning>
-                          <LocalTime iso={b.created} fallback="-" />
+                          {fmtIsoToLocal(b.created)}
                         </Td>
-                        <Td>{b.status ?? "-"}</Td>
+                        <Td>{b.minerEffort > 0 ? fmtNum(b.minerEffort * 100) + "%" : "NaN"}</Td>
+                        <Td>{b.reward ?? "NaN"}</Td>
+                        <Td>{b.status ?? "NaN"}</Td>
                       </tr>
                     ))
                   )}
@@ -449,7 +475,6 @@ export default async function PoolDetail({
           );
         })()}
       </section>
-
 
       {/* Pool info */}
       <section className="space-y-2">

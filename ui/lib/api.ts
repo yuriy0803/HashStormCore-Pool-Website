@@ -1,8 +1,7 @@
 // ui/lib/api.ts
+import { getLiveWindowSec } from "@/lib/live";
 
-// ======== Base configuration ========
-const BASE = "/api";
-
+/* ===================== Base configuration ===================== */
 const PUBLIC_BASE =
   process.env.NEXT_PUBLIC_MININGCORE_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
@@ -25,7 +24,7 @@ function joinApi(path: string) {
   return new URL(joined, SELF_ORIGIN).toString();
 }
 
-// ======== Request helper ========
+/* ===================== Request helper ===================== */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = joinApi(path);
   const res = await fetch(url, { ...init, cache: "no-store" });
@@ -44,30 +43,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   throw new Error(`Expected JSON but got: ${text.slice(0, 80)}... from ${url}`);
 }
 
-// Small util: normalize date to ISO (JS Date only supports up to 3 frac digits)
-export function toIso(s0?: string | number) {
-  if (s0 == null) return undefined;
-
-  if (typeof s0 === "number") {
-    const d = new Date(s0 > 1e12 ? s0 : s0 * 1000);
-    return isNaN(d.getTime()) ? undefined : d.toISOString();
-  }
-
-  let s = String(s0).trim();
-
-  // eg. "2025-11-03T19:20:19.011264Z" -> "2025-11-03T19:20:19.011Z"
-  s = s.replace(/\.(\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2})$)/, '.$1');
-
-  const d = new Date(s);
+/* ===================== Small utils ===================== */
+export function toIso(s?: string | number) {
+  if (s == null) return undefined;
+  if (typeof s === "number") return new Date(s > 1e12 ? s : s * 1000).toISOString();
+  const t = String(s).trim().replace(/\.(\d{3})\d+(?=(Z|[+-]\d{2}:?\d{2})$)/, ".$1");
+  const d = new Date(t);
   return isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
+export function fmtIsoToLocal(iso?: string | number | Date | null, withTime = true): string {
+  if (iso == null) return "-";
+  const d =
+    iso instanceof Date ? iso :
+    typeof iso === "number" ? new Date(iso > 1e12 ? iso : iso * 1000) :
+    new Date(String(iso));
 
-// --- helper for SLug of LIVE endpoints ---
-const normPoolId = (s: string) => encodeURIComponent(String(s).replace(/[\s-]+/g, "_").toLowerCase());
+  if (isNaN(d.getTime())) return "-";
 
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const Y = d.getFullYear();
+  const M = pad(d.getMonth() + 1);
+  const D = pad(d.getDate());
 
-// ======== Core endpoints ========
+  if (!withTime) return `${Y}-${M}-${D}`;
+
+  const h = pad(d.getHours());
+  const m = pad(d.getMinutes());
+  const s = pad(d.getSeconds());
+  return `${Y}-${M}-${D} ${h}:${m}:${s}`;
+}
+
+// --- helper para slug normalizado das LIVE endpoints ---
+const normPoolId = (s: string) => String(s).replace(/[\s-]+/g, "_").toLowerCase();
+
+/* ===================== Core endpoints (persistentes/DB) ===================== */
 const core = {
   listPools: async () => {
     const data = await request<any>("/pools");
@@ -79,34 +89,15 @@ const core = {
 
   // /blocks returns simple ARRAY
   poolBlocks: async (poolId: string, page = 1, pageSize = 20) => {
-    // try first LIVE (has created ISO guaranteed)
-    try {
-      const pidLive = normPoolId(poolId);
-      const arr = await request<any[]>(`/live/pools/${pidLive}/blocks?PageSize=10000`);
-      const blocksRaw = Array.isArray(arr) ? arr : [];
-
-      const blocks = blocksRaw.map((b) => ({
-        ...b,
-        // preserves ISO that already comes from live; fallback if missing
-        created: typeof b.created === "string" && b.created
-          ? b.created
-          : toIso(b.createdAt ?? b.creationTime ?? b.timestamp ?? b.time) ?? undefined,
-      }));
-
-      const start = Math.max(0, (page - 1) * pageSize);
-      return { page, pageSize, blocks: blocks.slice(start, start + pageSize), total: blocks.length };
-    } catch {
-      // fallback to /pools classic in case /live fails
-      const pid = encodeURIComponent(poolId);
-      const arr = await request<any[]>(`/pools/${pid}/blocks`);
-      const blocksRaw = Array.isArray(arr) ? arr : [];
-      const blocks = blocksRaw.map((b) => ({
-        ...b,
-        created: toIso(b.created ?? b.createdAt ?? b.creationTime ?? b.timestamp ?? b.time) ?? undefined,
-      }));
-      const start = Math.max(0, (page - 1) * pageSize);
-      return { page, pageSize, blocks: blocks.slice(start, start + pageSize), total: blocks.length };
-    }
+    const pid = encodeURIComponent(poolId);
+    const arr = await request<any[]>(`/pools/${pid}/blocks?PageSize=1000`);
+    const blocksRaw = Array.isArray(arr) ? arr : [];
+    const blocks = blocksRaw.map((b) => ({
+      ...b,
+      created: toIso(b.created ?? b.createdAt ?? b.creationTime ?? b.timestamp ?? b.time) ?? undefined,
+    }));
+    const start = Math.max(0, (page - 1) * pageSize);
+    return { page, pageSize, blocks: blocks.slice(start, start + pageSize), total: blocks.length };
   },
 
   poolPayments: async (poolId: string, page = 1, pageSize = 20) => {
@@ -122,7 +113,7 @@ const core = {
     return request<any[]>(`/pools/${pid}/miners`);
   },
 
-  // /performance -> { stats: [...] }
+  // /performance -> { stats: [...] } (ou array simples)
   poolPerf: async (poolId: string) => {
     const pid = encodeURIComponent(poolId);
     const data = await request<any>(`/pools/${pid}/performance`);
@@ -149,22 +140,37 @@ const core = {
   },
 };
 
-// ======== Live endpoints ========
+/* ===================== Live endpoints (voláteis/SSE-friendly) ===================== */
 const live = {
-  status: () => request<any>("/live/status"),
-  poolSnapshot: (poolId: string) =>
-    request<any>(`/live/pools/${normPoolId(poolId)}/snapshot`),
+  // usa a janela do .env por omissão
+  status: (windowSec?: number) => {
+    const ws = windowSec ?? getLiveWindowSec();
+    return request<any>(`/live/status?windowSec=${ws}`);
+  },
+
+  poolSnapshot: (poolId: string, windowSec?: number) => {
+    const ws = windowSec ?? getLiveWindowSec();
+    return request<any>(`/live/pools/${encodeURIComponent(normPoolId(poolId))}/snapshot?windowSec=${ws}`);
+  },
+
   poolRound: (poolId: string) =>
-    request<any>(`/live/pools/${normPoolId(poolId)}/round`),
-  poolTopMiners: (poolId: string, windowSec = 600, limit = 50) =>
-    request<any>(`/live/pools/${normPoolId(poolId)}/top-miners?windowSec=${windowSec}&limit=${limit}`),
-  minerSnapshot: (poolId: string, addr: string) =>
-    request<any>(`/live/pools/${normPoolId(poolId)}/miners/${encodeURIComponent(addr)}/snapshot`),
+    request<any>(`/live/pools/${encodeURIComponent(normPoolId(poolId))}/round`),
+
+  poolTopMiners: (poolId: string, windowSec?: number, limit = 50) => {
+    const ws = windowSec ?? getLiveWindowSec();
+    return request<any>(`/live/pools/${encodeURIComponent(normPoolId(poolId))}/top-miners?windowSec=${ws}&limit=${limit}`);
+  },
+
+  minerSnapshot: (poolId: string, addr: string, windowSec?: number) => {
+    const ws = windowSec ?? getLiveWindowSec();
+    return request<any>(`/live/pools/${encodeURIComponent(normPoolId(poolId))}/miners/${encodeURIComponent(addr)}/snapshot?windowSec=${ws}`);
+  },
+
   searchMiners: (q: string, limit = 20) =>
     request<any>(`/live/miners/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 };
 
-// ======== API type & export ========
+/* ===================== API type & export ===================== */
 type Api = typeof core &
   typeof live & {
     getPool(poolId: string): Promise<any | null>;
@@ -219,9 +225,9 @@ export const api: Api = {
       return stats.map((p: any) => ({
         ...p,
         created: (p.created && String(p.created)) ||
-          (p.time && String(p.time)) ||
-          (p.timestamp && String(p.timestamp)) ||
-          undefined,
+                 (p.time && String(p.time)) ||
+                 (p.timestamp && String(p.timestamp)) ||
+                 undefined,
         poolHashrate: Number(p.poolHashrate ?? 0),
         connectedMiners: Number(p.connectedMiners ?? 0),
       }));
@@ -231,7 +237,7 @@ export const api: Api = {
   },
 };
 
-// ======== SSE helper ========
+/* ===================== SSE helper ===================== */
 export function openEventSource(path: string, onMsg: (data: any) => void) {
   const abs = joinApi(path);
   const es = new EventSource(abs);
@@ -240,3 +246,7 @@ export function openEventSource(path: string, onMsg: (data: any) => void) {
   };
   return es;
 }
+
+/* ===================== Public constant (optional) ===================== */
+export const LIVE_WINDOW_SEC =
+  Number(process.env.NEXT_PUBLIC_LIVE_WINDOW_SEC ?? "600");

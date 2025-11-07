@@ -1,49 +1,14 @@
 // ui/components/LocalTime.tsx
 "use client";
-
-import React from "react";
+import * as React from "react";
 
 type Props = {
-  iso?: unknown;           // accepts Date | number | string
+  iso?: string | number | Date | null;
   className?: string;
   fallback?: React.ReactNode;
-  withTime?: boolean;      //if true shows date+time, if not only date
+  withTime?: boolean; // true → mostra hh:mm:ss; false → só data
 };
 
-function parseAnyDate(v: unknown): Date | null {
-  if (v == null) return null;
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-
-  if (typeof v === "number") {
-    const ms = v < 1e12 ? v * 1000 : v; // epoch s vs ms
-    const d = new Date(ms);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  let s = String(v).trim();
-  if (!s) return null;
-
-  // epoch, string
-  if (/^\d{10}$/.test(s)) return new Date(Number(s) * 1000);
-  if (/^\d{13}$/.test(s)) return new Date(Number(s));
-
-  // "YYYY-MM-DD HH:mm:ss[.frac]" (assumed: UTC)
-  const m1 = s.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/
-  );
-  if (m1) {
-    const [, yy, MM, dd, hh, mm, ss, frac = "000"] = m1;
-    const ms = Number((frac + "000").slice(0, 3)); // clamp
-    const d = new Date(Date.UTC(+yy, +MM - 1, +dd, +hh, +mm, +ss, ms));
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  // ISO with fraction >3 digits
-  s = s.replace(/(\.\d{3})\d+(Z)?$/, "$1$2");
-
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
-}
 
 export default function LocalTime({
   iso,
@@ -54,13 +19,33 @@ export default function LocalTime({
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const d = parseAnyDate(iso);
-  if (!mounted) return <span className={className}>{fallback}</span>;
-  if (!d) return <span className={className}>{fallback}</span>;
+ 
+  let d: Date | null = null;
+  if (iso instanceof Date) {
+    d = isNaN(iso.getTime()) ? null : iso;
+  } else if (typeof iso === "number") {
+    const ms = iso > 1e12 ? iso : iso * 1000; // epoch ms vs s
+    const tmp = new Date(ms);
+    d = isNaN(tmp.getTime()) ? null : tmp;
+  } else if (typeof iso === "string") {
+    const tmp = new Date(iso);
+    d = isNaN(tmp.getTime()) ? null : tmp;
+  }
+
+  if (!mounted || !d) return <span className={className}>{fallback}</span>;
 
   const opts: Intl.DateTimeFormatOptions = withTime
     ? { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }
     : { year: "numeric", month: "2-digit", day: "2-digit" };
 
-  return <time className={className}>{d.toLocaleString(undefined, opts)}</time>;
+  return (
+    <time
+      className={className}
+      dateTime={d.toISOString()}
+      title={d.toISOString()}
+      suppressHydrationWarning
+    >
+      {d.toLocaleString(undefined, opts)}
+    </time>
+  );
 }

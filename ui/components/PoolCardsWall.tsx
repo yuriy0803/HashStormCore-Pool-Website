@@ -30,17 +30,16 @@ function fmtMetric(v: number, unit: string) {
 function Dot({ ok }: { ok: boolean }) {
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"
-        }`}
+      className={`inline-block h-2.5 w-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`}
     />
   );
 }
 
 export default async function PoolCardsWall() {
-  // base list: never disappears (comes from core)
+  // base list: persisted
   const pools = await api.listPools().catch(() => []);
 
-  // attempts live snapshots (one per pool) - if it fails, the card becomes "Inactive"
+  // live snapshots
   const snaps = await Promise.all(
     pools.map(async (p: any) => {
       try {
@@ -55,7 +54,7 @@ export default async function PoolCardsWall() {
       } catch {
         return {
           poolId: p.id,
-          unit: p.unit || "H/s",
+          unit: "H/s",
           currentHashrate: 0,
           minersOnline: 0,
           luckPercent: undefined,
@@ -64,7 +63,7 @@ export default async function PoolCardsWall() {
     })
   );
 
-  const byId = new Map(snaps.map(s => [s.poolId, s]));
+  const byId = new Map(snaps.map((s) => [s.poolId, s]));
 
   if (pools.length === 0) {
     return (
@@ -75,17 +74,25 @@ export default async function PoolCardsWall() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-3">
       {pools.map((p: any) => {
         const s = byId.get(p.id)!;
-        const active = !!s && s.currentHashrate > 0 || s.minersOnline > 0; // if there is live, it is considered active; if everything is zero, it shows Inactive
+
+        const hasPorts = Object.keys(p?.ports ?? {}).length > 0;
+        const active = (p?.enabled !== false) && hasPorts;
+
+        const liveOk = (Number(s?.currentHashrate ?? 0) > 0) || (Number(s?.minersOnline ?? 0) > 0);
 
         const minPayout = p?.paymentProcessing?.minimumPayment;
         const coinSym = p?.coin?.symbol || "";
+        const unit = s?.unit || "H/s";
+        const hashrateVal = Number(s?.currentHashrate ?? 0);
 
         return (
-          <div key={p.id} className={`rounded-2xl border px-0 py-0 overflow-hidden ${active ? "border-emerald-700/40" : "border-[var(--edge)]"
-            } bg-[var(--card)]`}>
+          <div
+            key={p.id}
+            className={`rounded-2xl border px-0 py-0 overflow-hidden  border-bg-100/10 bg-[var(--card)]`}
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--edge)]">
               <div className="flex items-center gap-2">
@@ -105,7 +112,7 @@ export default async function PoolCardsWall() {
                 </div>
               </div>
               <div className="text-right font-semibold">
-                {fmtMetric(Number(s?.currentHashrate ?? 0), s?.unit || "H/s")}
+                {fmtMetric(hashrateVal, unit)}
               </div>
             </div>
 
@@ -130,17 +137,10 @@ export default async function PoolCardsWall() {
                 </span>
               </div>
 
-              <div className="flex justify-between">
-                <span className="text-[var(--muted)]">Payouts in Bitcoin</span>
-                <span>
-                  No
-                </span>
-              </div>
-
               <div className="flex justify-between pt-1 border-t border-[var(--edge)]">
                 <span className="text-[var(--muted)]">Status</span>
                 <span className="inline-flex items-center gap-2">
-                  {active ? "Active" : "Inactive"} <Dot ok={active} />
+                  {active ? "Active" : "Inactive"} <Dot ok={active} />    
                 </span>
               </div>
             </div>
